@@ -1,0 +1,7 @@
+pandas
+numpy
+scikit-learn
+joblib
+google-cloud-storage
+google-cloud-aiplatform
+kfp
