@@ -1,0 +1,70 @@
+import pandas as pd
+import numpy as np
+import joblib
+import argparse
+import os
+from sklearn.model_selection import train_test_split
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from google.cloud import storage
+
+def preprocess_data(project_id, bucket_name, input_file):
+    # 1. Load data from GCS
+    print(f"Reading data from gs://{bucket_name}/{input_file}")
+    path = f"gs://{bucket_name}/{input_file}"
+    df = pd.read_csv(path)
+
+    # 2. Define Features
+    # Identify column types automatically
+    target = 'price' # Assuming 'price' is the target column
+    numeric_features = df.select_dtypes(include=['int64', 'float64']).drop([target], axis=1).columns.tolist()
+    categorical_features = df.select_dtypes(include=['object']).columns.tolist()
+
+    print(f"Numeric features: {numeric_features}")
+    print(f"Categorical features: {categorical_features}")
+
+    # 3. Create Transformers
+    # Numeric: Fill missing with Median + Scale (important for some models)
+    numeric_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler())
+    ])
+
+    # Categorical: Fill missing with Most Frequent + OneHot Encode
+    categorical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='most_frequent')),
+        ('onehot', OneHotEncoder(handle_unknown='ignore'))
+    ])
+
+    # 4. Bundle transformations
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numeric_transformer, numeric_features),
+            ('cat', categorical_transformer, categorical_features)
+        ])
+
+    # 5. Split Data
+    X = df.drop(target, axis=1)
+    y = df[target]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # 6. Fit and Transform
+    print("Fitting preprocessor...")
+    X_train_transformed = preprocessor.fit_transform(X_train)
+    X_test_transformed = preprocessor.transform(X_test)
+
+    # 7. Save locally first (then we upload)
+    os.makedirs("data/processed", exist_ok=True)
+    joblib.dump(preprocessor, "data/processed/preprocessor.joblib")
+    
+    # Save transformed data as CSVs for the Training Step
+    # We combine X and y back together for the trainer
+    train_df = pd.DataFrame(X_train_transformed)
+    train_df['target'] = y_train.values
+    test_df = pd.DataFrame(X_test_transformed)
+    test_df['target'] = y_test.values
+
+    train_df.to_csv("data/processed/train.csv", index=False)
+    test_df.to_csv("data/processed/test.csv", index=False)
