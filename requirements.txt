@@ -5,3 +5,5 @@ joblib
 google-cloud-storage
 google-cloud-aiplatform
 kfp
+fastapi
+uvicorn

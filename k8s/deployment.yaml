@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rent-predictor-deployment
+  labels:
+    app: rent-predictor
+spec:
+  replicas: 2 # Two instances are started simultaneously; if one fails, the other immediately takes over.
+  selector:
+    matchLabels:
+      app: rent-predictor
+  template:
+    metadata:
+      labels:
+        app: rent-predictor
+    spec:
+      containers:
+      - name: predictor-container
+        image: europe-central2-docker.pkg.dev/arboreal-totem-495915-v1/rent-mlops-repo/rent-price-api:v1
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
